@@ -1,0 +1,171 @@
+---
+title: "my presentation"
+author: "waheeb Algabri"
+output:
+  html_document:
+    highlight: pygments
+    theme: cerulean
+    toc: true
+    toc_float: true
+  pdf_document: default
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(eval = TRUE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(openintro)
+```
+
+#### project introduction
+
+In this project, you’re given a text file with chess tournament results where the information has some structure. Your job is to create an R Markdown file that generates a .CSV file (that could for example be imported into a SQL database) with the following information for all of the players:
+Player’s Name, Player’s State, Total Number of Points, Player’s Pre-Rating, and Average Pre Chess Rating of Opponents
+For the first player, the information would be:
+Gary Hua, ON, 6.0, 1794, 1605
+1605 was calculated by using the pre-tournament opponents’ ratings of 1436, 1563, 1600, 1610, 1649, 1663, 1716, and dividing by the total number of games played.
+If you have questions about the meaning of the data or the results, please post them on the discussion forum. Data science, like chess, is a game of back and forth...
+The chess rating system (invented by a Minnesota statistician named Arpad Elo) has been used in many other contexts, including assessing relative strength of employment candidates by human resource departments.
+You may substitute another text file (or set of text files, or data scraped from web pages) of similar or greater complexity, and create your own assignment and solution. You may work in a small team. All of your code should be in an R markdown file (and published to rpubs.com); with your data accessible for the person running the script.
+
+
+#### Loading the data
+
+```{r}
+library(stringr)
+library(ggplot2)
+library(tidyverse)
+```
+
+I,m going to use ./ in front of the file to make my codes more explicit and portable.
+
+```{r}
+tournment<- ("./tournamentinfo.txt")
+waheeb<- readLines(tournment)
+head(waheeb, 7)
+```
+
+
+#### Data transformation
+
+```{r}
+# remove first 4 rows that I don't need
+con <- waheeb[-c(0:4)]
+```
+
+```{r}
+# remove unnecessary spaces
+con <- con[sapply(con, nchar) > 0]
+
+```
+
+
+```{r}
+# divide odd / even rows into separate set of lines
+odd <- c(seq(1, length(con), 3))
+odd_a <- con[odd]
+
+even <- c(seq(2, length(con), 3))
+even_a <- con[even]
+```
+
+I will use regex to extract the only required information.
+
+```{r}
+# name
+name <- str_extract(odd_a, "\\s+([[:alpha:]- ]+)\\b\\s*\\|")
+name <- gsub(name, pattern = "|", replacement = "", fixed = T)
+# strip the space
+name <- trimws(name)
+
+# state
+state <- str_extract(even_a, "[[:alpha:]]{2}")
+
+# total_points
+total_points <- str_extract(odd_a, "[[:digit:]]+\\.[[:digit:]]")
+total_points <- as.numeric(as.character(total_points))
+
+# pre_rating
+pre_rating <- str_extract(even_a, ".\\: \\s?[[:digit:]]{3,4}")
+pre_rating <- gsub(pre_rating, pattern = "R: ", replacement = "", fixed = T)
+pre_rating <- as.numeric(as.character(pre_rating))
+
+# opponent_number to extract opponents pair number per player
+opponent_number <- str_extract_all(odd_a, "[[:digit:]]{1,2}\\|")
+opponent_number <- str_extract_all(opponent_number, "[[:digit:]]{1,2}")
+opponent_number <- lapply(opponent_number, as.numeric)
+```
+
+
+calculate Average Pre Chess Rating of Opponents and store that in a list.
+
+```{r}
+opp_avg_rating <- list()
+for (i in 1:length(opponent_number)){
+  opp_avg_rating[i] <- round(mean(pre_rating[unlist(opponent_number[i])]),2)
+}
+opp_avg_rating <- lapply(opp_avg_rating, as.numeric)
+opp_avg_rating <- data.frame(unlist(opp_avg_rating))
+```
+
+
+create data frame 
+
+```{r}
+df <- cbind.data.frame(name, state, total_points, pre_rating, opp_avg_rating)
+colnames(df) <- c("Name", "State", "Total_points", "Pre_rating", "Avg_pre_chess_rating_of_opponents")
+head(df)
+```
+
+#### Visualization
+
+```{r}
+ggplot(data = df, aes(x = Pre_rating, y = Total_points)) +
+  geom_point(size = 4, color = "blue") +
+  ggtitle("Pre-chess rating vs Total points earned") +
+  xlab("Pre-chess rating") +
+  ylab("Total points earned")
+
+```
+
+
+```{r}
+df_state_points <- df %>% group_by(State) %>% 
+  summarize(Total_points = sum(Total_points))
+
+ggplot(data = df_state_points, aes(x = "", y = Total_points, fill = State)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y", start = 0) +
+  ggtitle("Distribution of Total points earned by players from different states") +
+  labs(fill = "State") +
+  scale_fill_brewer(palette = "Set1")
+
+```
+
+#### Conclusion
+
+
+```{r}
+summary(df$Total_points)
+
+```
+
+
+The majority of the values for the "Total_points" variable fall between 2.5 and 4.0, with a median value of 3.5. The mean value of 3.438 is close to the median value, indicating that the data is relatively symmetrical and does not have any extreme outliers.
+
+
+```{r}
+table(df$State)
+
+```
+
+ The frequency distribution of the number of players in each state, with MI having the highest frequency of 55 players, OH having 1 player, and ON having 8 players. From this information, it can be concluded that most of the players in this dataset come from the state of MI, while there are significantly fewer players from OH and ON.
+ 
+ 
+```{r}
+summary(df)
+```
+
+Based on the summary statistics for the data, the average total points for the players is 3.438 with a median of 3.5. The average pre-rating of the players is 1378 with a median of 1407. The average pre-chess rating of the opponents is 1379 with a median of 1382. From this information, we can conclude that the players tend to score around the average total points, with a relatively stable pre-rating and opponents' pre-chess rating.
+
